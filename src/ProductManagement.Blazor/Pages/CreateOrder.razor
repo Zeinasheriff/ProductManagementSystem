@@ -1,0 +1,149 @@
+@page "/orders/create"
+@attribute [Authorize]
+@inject IProductClientService ProductService
+@inject IOrderClientService OrderService
+@inject NavigationManager NavManager
+
+<h3>Create New Order</h3>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+
+<div class="row">
+    <div class="col-md-7">
+        <h5>Available Products</h5>
+        @if (products == null)
+        {
+            <p>Loading catalog...</p>
+        }
+        else
+        {
+            <div class="list-group">
+                @foreach (var p in products.Items.Where(x => x.IsActive && x.StockQuantity > 0))
+                {
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>@p.Name</strong> - @p.Price.ToString("C")
+                            <br /><small class="text-muted">Available Stock: @p.StockQuantity</small>
+                        </div>
+                        <button class="btn btn-sm btn-primary" @onclick="() => AddToCart(p)">Add to Order</button>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="col-md-5">
+        <h5>Order Items</h5>
+        @if (!cart.Any())
+        {
+            <p class="text-muted">No items selected.</p>
+        }
+        else
+        {
+            <ul class="list-group mb-3">
+                @foreach (var item in cart)
+                {
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>@item.ProductName</strong>
+                            <br />@item.UnitPrice.ToString("C") x 
+                            <input type="number" style="width:60px;" min="1" max="@item.MaxStock" @bind="item.Quantity" @bind:after="CalculateTotal" />
+                        </div>
+                        <div>
+                            <span>@((item.UnitPrice * item.Quantity).ToString("C"))</span>
+                            <button class="btn btn-sm btn-danger ms-2" @onclick="() => RemoveFromCart(item)">X</button>
+                        </div>
+                    </li>
+                }
+            </ul>
+
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4>Total (Estimated):</h4>
+                <h4>@estimatedTotal.ToString("C")</h4>
+            </div>
+
+            <button class="btn btn-success w-100" @onclick="SubmitOrder" disabled="@isSubmitting">
+                @(isSubmitting ? "Processing..." : "Place Order")
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    private PagedResult<ProductDto>? products;
+    private List<CartItem> cart = new();
+    private decimal estimatedTotal = 0m;
+    private string errorMessage = string.Empty;
+    private bool isSubmitting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        products = await ProductService.SearchProducts("", 1, 100);
+    }
+
+    private void AddToCart(ProductDto product)
+    {
+        var existing = cart.FirstOrDefault(c => c.ProductId == product.Id);
+        if (existing == null)
+        {
+            cart.Add(new CartItem
+            {
+                ProductId = product.Id,
+                ProductName = product.Name,
+                UnitPrice = product.Price,
+                MaxStock = product.StockQuantity,
+                Quantity = 1
+            });
+        }
+        else if (existing.Quantity < product.StockQuantity)
+        {
+            existing.Quantity++;
+        }
+        CalculateTotal();
+    }
+
+    private void RemoveFromCart(CartItem item)
+    {
+        cart.Remove(item);
+        CalculateTotal();
+    }
+
+    private void CalculateTotal()
+    {
+        estimatedTotal = cart.Sum(i => i.UnitPrice * i.Quantity);
+    }
+
+    private async Task SubmitOrder()
+    {
+        errorMessage = string.Empty;
+        isSubmitting = true;
+
+        var request = new CreateOrderRequest(
+            cart.Select(c => new CreateOrderItemRequest(c.ProductId, c.Quantity)).ToList()
+        );
+
+        var result = await OrderService.CreateOrder(request);
+        isSubmitting = false;
+
+        if (result != null)
+        {
+            NavManager.NavigateTo("/orders");
+        }
+        else
+        {
+            errorMessage = "Order submission failed. Check stock availability or try again.";
+        }
+    }
+
+    private class CartItem
+    {
+        public int ProductId { get; set; }
+        public string ProductName { get; set; } = string.Empty;
+        public decimal UnitPrice { get; set; }
+        public int MaxStock { get; set; }
+        public int Quantity { get; set; }
+    }
+}

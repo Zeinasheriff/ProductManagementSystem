@@ -1,0 +1,129 @@
+@page "/products"
+@inject IProductClientService ProductService
+@inject NavigationManager NavManager
+
+<h3>Product Catalog</h3>
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        <input type="text" class="form-control" placeholder="Search by name..." @bind="searchQuery" @bind:event="oninput" @onkeyup="HandleSearch" />
+    </div>
+    <AuthorizeView Roles="Admin">
+        <Authorized>
+            <div class="col-md-6 text-end">
+                <button class="btn btn-primary" @onclick="CreateNew">Create Product</button>
+            </div>
+        </Authorized>
+    </AuthorizeView>
+</div>
+
+@if (loading)
+{
+    <p><em>Loading products...</em></p>
+}
+else if (pagedResult == null || !pagedResult.Items.Any())
+{
+    <p>No products found.</p>
+}
+else
+{
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Price</th>
+                <th>Stock</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var p in pagedResult.Items)
+            {
+                <tr>
+                    <td>@p.Name</td>
+                    <td>@p.Description</td>
+                    <td>@p.Price.ToString("C")</td>
+                    <td>@p.StockQuantity</td>
+                    <td>
+                        <span class="badge @(p.IsActive ? "bg-success" : "bg-secondary")">
+                            @(p.IsActive ? "Active" : "Inactive")
+                        </span>
+                    </td>
+                    <td>
+                        <AuthorizeView Roles="Admin">
+                            <Authorized>
+                                <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => EditProduct(p.Id)">Edit</button>
+                                @if (p.IsActive)
+                                {
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeactivateProduct(p.Id)">Deactivate</button>
+                                }
+                            </Authorized>
+                        </AuthorizeView>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <div class="d-flex justify-content-between">
+        <button class="btn btn-outline-primary" disabled="@(!pagedResult.HasPreviousPage)" @onclick="PreviousPage">Previous</button>
+        <span>Page @pagedResult.PageNumber of @pagedResult.TotalPages</span>
+        <button class="btn btn-outline-primary" disabled="@(!pagedResult.HasNextPage)" @onclick="NextPage">Next</button>
+    </div>
+}
+
+@code {
+    private PagedResult<ProductDto>? pagedResult;
+    private string searchQuery = string.Empty;
+    private int currentPage = 1;
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProducts();
+    }
+
+    private async Task LoadProducts()
+    {
+        loading = true;
+        pagedResult = await ProductService.SearchProducts(searchQuery, currentPage, 10);
+        loading = false;
+    }
+
+    private async Task HandleSearch()
+    {
+        currentPage = 1;
+        await LoadProducts();
+    }
+
+    private async Task PreviousPage()
+    {
+        if (pagedResult?.HasPreviousPage == true)
+        {
+            currentPage--;
+            await LoadProducts();
+        }
+    }
+
+    private async Task NextPage()
+    {
+        if (pagedResult?.HasNextPage == true)
+        {
+            currentPage++;
+            await LoadProducts();
+        }
+    }
+
+    private void CreateNew() => NavManager.NavigateTo("/products/create");
+    private void EditProduct(int id) => NavManager.NavigateTo($"/products/edit/{id}");
+
+    private async Task DeactivateProduct(int id)
+    {
+        if (await ProductService.Deactivate(id))
+        {
+            await LoadProducts();
+        }
+    }
+}
