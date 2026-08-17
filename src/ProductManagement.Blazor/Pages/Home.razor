@@ -2,6 +2,74 @@
 
 <PageTitle>Home</PageTitle>
 
-<h1>Hello, world!</h1>
+<div class="text-center mb-5">
+    <h1 class="display-4">Product Management System</h1>
+    <p class="lead">Manage products, create orders, and track your inventory.</p>
+</div>
 
-Welcome to your new app.
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body text-center">
+                <h5 class="card-title">Products</h5>
+                <p class="card-text">Browse the catalog, search by name, and view stock levels.</p>
+                <a href="/products" class="btn btn-primary">View Products</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body text-center">
+                <h5 class="card-title">Create Order</h5>
+                <p class="card-text">Place an order with one or more products. Stock is validated automatically.</p>
+                <AuthorizeView>
+                    <Authorized>
+                        <a href="/orders/create" class="btn btn-success">Create Order</a>
+                    </Authorized>
+                    <NotAuthorized>
+                        <a href="/login" class="btn btn-success">Login to Order</a>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body text-center">
+                <h5 class="card-title">My Orders</h5>
+                <p class="card-text">View your order history, line items, and totals.</p>
+                <AuthorizeView>
+                    <Authorized>
+                        <a href="/orders" class="btn btn-info text-white">View Orders</a>
+                    </Authorized>
+                    <NotAuthorized>
+                        <a href="/register" class="btn btn-info text-white">Register</a>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4 shadow-sm">
+    <div class="card-header bg-light"><strong>Demo Accounts</strong></div>
+    <div class="card-body">
+        <table class="table table-sm mb-0">
+            <thead>
+                <tr><th>Role</th><th>Email</th><th>Password</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="badge bg-danger">Admin</span></td>
+                    <td>admin@system.local</td>
+                    <td><code>Admin123!</code></td>
+                </tr>
+                <tr>
+                    <td><span class="badge bg-primary">User</span></td>
+                    <td>user@system.local</td>
+                    <td><code>User123!</code></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>

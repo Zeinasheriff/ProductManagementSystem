@@ -1,0 +1,109 @@
+@page "/register"
+@using System.ComponentModel.DataAnnotations
+@inject IAuthService AuthService
+@inject NavigationManager NavManager
+
+<PageTitle>Register</PageTitle>
+
+<div class="row justify-content-center mt-5">
+    <div class="col-md-5">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Create Account</h4>
+            </div>
+            <div class="card-body">
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger">@errorMessage</div>
+                }
+
+                <EditForm Model="@registerModel" OnValidSubmit="HandleRegister">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">First Name</label>
+                            <InputText @bind-Value="registerModel.FirstName" class="form-control" placeholder="John" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Last Name</label>
+                            <InputText @bind-Value="registerModel.LastName" class="form-control" placeholder="Doe" />
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <InputText @bind-Value="registerModel.Email" class="form-control" placeholder="you@example.com" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <InputText type="password" @bind-Value="registerModel.Password" class="form-control" placeholder="At least 8 chars with upper, lower, digit & symbol" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Confirm Password</label>
+                        <InputText type="password" @bind-Value="registerModel.ConfirmPassword" class="form-control" placeholder="Re-enter password" />
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100" disabled="@isSubmitting">
+                        @(isSubmitting ? "Creating account..." : "Register")
+                    </button>
+                </EditForm>
+
+                <div class="mt-3 text-center">
+                    <span>Already have an account? </span>
+                    <a href="/login">Login</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private RegisterModel registerModel = new();
+    private string errorMessage = string.Empty;
+    private bool isSubmitting = false;
+
+    private async Task HandleRegister()
+    {
+        errorMessage = string.Empty;
+        isSubmitting = true;
+
+        var response = await AuthService.Register(new RegisterRequest(
+            registerModel.Email, registerModel.Password,
+            registerModel.FirstName, registerModel.LastName));
+        isSubmitting = false;
+
+        if (response.Success)
+        {
+            NavManager.NavigateTo("/login");
+        }
+        else
+        {
+            errorMessage = response.Message;
+        }
+    }
+
+    private class RegisterModel
+    {
+        [Required(ErrorMessage = "First name is required.")]
+        public string FirstName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Last name is required.")]
+        public string LastName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Email is required.")]
+        [EmailAddress(ErrorMessage = "Invalid email address.")]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Password is required.")]
+        [MinLength(8, ErrorMessage = "Password must be at least 8 characters.")]
+        public string Password { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Please confirm your password.")]
+        [Compare(nameof(Password), ErrorMessage = "Passwords do not match.")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+}

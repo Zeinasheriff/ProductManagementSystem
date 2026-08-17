@@ -1,0 +1,9 @@
+@page "/products/create"
+@using ProductManagement.Blazor.Shared
+@attribute [Authorize(Roles = "Admin")]
+
+<PageTitle>Create Product</PageTitle>
+
+<h3>Create Product</h3>
+
+<ProductForm IsEdit="false" />

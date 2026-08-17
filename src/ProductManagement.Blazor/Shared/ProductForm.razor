@@ -1,0 +1,140 @@
+@using System.ComponentModel.DataAnnotations
+@inject IProductClientService ProductService
+@inject NavigationManager NavManager
+
+@if (IsEdit && loading)
+{
+    <p><em>Loading product...</em></p>
+}
+else
+{
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+
+    <EditForm Model="@model" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <InputText @bind-Value="model.Name" class="form-control" placeholder="Product name" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Description</label>
+            <InputTextArea @bind-Value="model.Description" class="form-control" rows="3" placeholder="Product description" />
+        </div>
+
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Price</label>
+                <InputNumber @bind-Value="model.Price" class="form-control" />
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Stock Quantity</label>
+                <InputNumber @bind-Value="model.StockQuantity" class="form-control" />
+            </div>
+        </div>
+
+        @if (IsEdit)
+        {
+            <div class="mb-3 form-check">
+                <InputCheckbox @bind-Value="model.IsActive" class="form-check-input" id="isActive" />
+                <label class="form-check-label" for="isActive">Active</label>
+            </div>
+        }
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary" disabled="@isSubmitting">
+                @(isSubmitting ? "Saving..." : (IsEdit ? "Update Product" : "Create Product"))
+            </button>
+            <button type="button" class="btn btn-secondary" @onclick="Cancel">Cancel</button>
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter] public int? ProductId { get; set; }
+    [Parameter] public bool IsEdit { get; set; }
+
+    private ProductFormModel model = new();
+    private string errorMessage = string.Empty;
+    private bool isSubmitting = false;
+    private bool loading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (IsEdit && ProductId.HasValue)
+        {
+            loading = true;
+            var product = await ProductService.GetById(ProductId.Value);
+            loading = false;
+
+            if (product == null)
+            {
+                errorMessage = "Product not found.";
+                return;
+            }
+
+            model = new ProductFormModel
+            {
+                Name = product.Name,
+                Description = product.Description,
+                Price = product.Price,
+                StockQuantity = product.StockQuantity,
+                IsActive = product.IsActive
+            };
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        errorMessage = string.Empty;
+        isSubmitting = true;
+
+        bool success;
+        if (IsEdit && ProductId.HasValue)
+        {
+            success = await ProductService.Update(ProductId.Value, new UpdateProductRequest(
+                model.Name, model.Description, model.Price, model.StockQuantity, model.IsActive));
+        }
+        else
+        {
+            success = await ProductService.Create(new CreateProductRequest(
+                model.Name, model.Description, model.Price, model.StockQuantity));
+        }
+
+        isSubmitting = false;
+
+        if (success)
+        {
+            NavManager.NavigateTo("/products");
+        }
+        else
+        {
+            errorMessage = "Failed to save product. Please check your input and try again.";
+        }
+    }
+
+    private void Cancel() => NavManager.NavigateTo("/products");
+
+    private class ProductFormModel
+    {
+        [Required(ErrorMessage = "Product name is required.")]
+        [StringLength(150, ErrorMessage = "Name must not exceed 150 characters.")]
+        public string Name { get; set; } = string.Empty;
+
+        [StringLength(1000, ErrorMessage = "Description must not exceed 1000 characters.")]
+        public string Description { get; set; } = string.Empty;
+
+        [Range(0.01, double.MaxValue, ErrorMessage = "Price must be greater than zero.")]
+        public decimal Price { get; set; }
+
+        [Range(0, int.MaxValue, ErrorMessage = "Stock quantity cannot be negative.")]
+        public int StockQuantity { get; set; }
+
+        public bool IsActive { get; set; } = true;
+    }
+}

@@ -1,0 +1,13 @@
+@page "/products/edit/{Id:int}"
+@using ProductManagement.Blazor.Shared
+@attribute [Authorize(Roles = "Admin")]
+
+<PageTitle>Edit Product</PageTitle>
+
+<h3>Edit Product</h3>
+
+<ProductForm IsEdit="true" ProductId="@Id" />
+
+@code {
+    [Parameter] public int Id { get; set; }
+}
