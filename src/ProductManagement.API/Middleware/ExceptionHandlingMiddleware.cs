@@ -9,11 +9,13 @@ public class ExceptionHandlingMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
+    private readonly IHostEnvironment _environment;
 
-    public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
+    public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger, IHostEnvironment environment)
     {
         _next = next;
         _logger = logger;
+        _environment = environment;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -25,11 +27,11 @@ public class ExceptionHandlingMiddleware
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unhandled exception encountered during request processing.");
-            await HandleExceptionAsync(context, ex);
+            await HandleExceptionAsync(context, ex, _environment);
         }
     }
 
-    private static Task HandleExceptionAsync(HttpContext context, Exception exception)
+    private static Task HandleExceptionAsync(HttpContext context, Exception exception, IHostEnvironment environment)
     {
         context.Response.ContentType = "application/problem+json";
 
@@ -74,6 +76,19 @@ public class ExceptionHandlingMiddleware
                 problemDetails.Status = (int)HttpStatusCode.InternalServerError;
                 problemDetails.Title = "Internal Server Error";
                 problemDetails.Detail = "An unexpected error occurred on the server. Please try again later.";
+
+                // Only leak exception internals in Development so a 500 is diagnosable
+                // locally without exposing stack traces/implementation details in Production.
+                if (environment.IsDevelopment())
+                {
+                    problemDetails.Extensions["exceptionType"] = exception.GetType().FullName;
+                    problemDetails.Extensions["exceptionMessage"] = exception.Message;
+                    problemDetails.Extensions["stackTrace"] = exception.StackTrace;
+                    if (exception.InnerException != null)
+                    {
+                        problemDetails.Extensions["innerException"] = exception.InnerException.Message;
+                    }
+                }
                 break;
         }
 

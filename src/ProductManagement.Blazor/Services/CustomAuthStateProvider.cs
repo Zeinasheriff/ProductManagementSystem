@@ -28,20 +28,14 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
                 return _anonymous;
             }
 
-            var handler = new JwtSecurityTokenHandler();
-            var jwtToken = handler.ReadJwtToken(token);
-
-            if (jwtToken.ValidTo < DateTime.UtcNow)
+            var identity = CreateIdentityFromToken(token);
+            if (identity == null)
             {
                 await _localStorage.RemoveItemAsync("authToken");
                 return _anonymous;
             }
 
-            var claims = jwtToken.Claims;
-            var identity = new ClaimsIdentity(claims, "jwt");
-            var user = new ClaimsPrincipal(identity);
-
-            return new AuthenticationState(user);
+            return new AuthenticationState(new ClaimsPrincipal(identity));
         }
         catch
         {
@@ -51,13 +45,10 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
 
     public void NotifyUserAuthentication(string token)
     {
-        var handler = new JwtSecurityTokenHandler();
-        var jwtToken = handler.ReadJwtToken(token);
-        var claims = jwtToken.Claims;
-        var identity = new ClaimsIdentity(claims, "jwt");
-        var user = new ClaimsPrincipal(identity);
+        var identity = CreateIdentityFromToken(token);
+        if (identity == null) return;
 
-        var authState = Task.FromResult(new AuthenticationState(user));
+        var authState = Task.FromResult(new AuthenticationState(new ClaimsPrincipal(identity)));
         NotifyAuthenticationStateChanged(authState);
     }
 
@@ -66,4 +57,54 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
         var authState = Task.FromResult(_anonymous);
         NotifyAuthenticationStateChanged(authState);
     }
+
+    /// <summary>
+    /// Builds a ClaimsIdentity from a JWT, mapping short JWT claim names
+    /// (e.g. given_name, family_name, email, role) to the long .NET
+    /// ClaimTypes values so that ClaimTypes.GivenName, ClaimTypes.Email,
+    /// ClaimTypes.Role etc. resolve correctly.
+    /// </summary>
+    private static ClaimsIdentity? CreateIdentityFromToken(string token)
+    {
+        try
+        {
+            var handler = new JwtSecurityTokenHandler();
+            var jwtToken = handler.ReadJwtToken(token);
+
+            if (jwtToken.ValidTo < DateTime.UtcNow)
+            {
+                return null; // expired
+            }
+
+            var claims = jwtToken.Claims
+                .Select(c => new Claim(MapClaimType(c.Type), c.Value, c.ValueType, c.Issuer, c.OriginalIssuer))
+                .ToList();
+
+            // Fallback: if no nameidentifier claim present, add one from "sub" or "nameid"
+            if (!claims.Any(c => c.Type == ClaimTypes.NameIdentifier))
+            {
+                var sub = jwtToken.Claims.FirstOrDefault(c => c.Type is "sub" or "nameid")?.Value;
+                if (!string.IsNullOrWhiteSpace(sub))
+                {
+                    claims.Add(new Claim(ClaimTypes.NameIdentifier, sub));
+                }
+            }
+
+            return new ClaimsIdentity(claims, "jwt");
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string MapClaimType(string claimType) => claimType switch
+    {
+        "given_name" or "unique_name" or "firstname" => ClaimTypes.GivenName,
+        "family_name" or "surname" or "lastname" => ClaimTypes.Surname,
+        "email" or "emailaddress" => ClaimTypes.Email,
+        "role" => ClaimTypes.Role,
+        "nameid" or "sub" => ClaimTypes.NameIdentifier,
+        _ => claimType
+    };
 }

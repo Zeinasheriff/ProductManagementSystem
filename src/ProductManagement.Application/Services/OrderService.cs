@@ -32,7 +32,7 @@ public class OrderService : IOrderService
             .Select(g => new { ProductId = g.Key, Quantity = g.Sum(x => x.Quantity) })
             .ToList();
 
-        using var transaction = await _context.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await _context.BeginTransactionAsync(cancellationToken);
 
         try
         {
@@ -113,15 +113,18 @@ public class OrderService : IOrderService
 
     public async Task<List<OrderDto>> GetUserOrdersAsync(string userId, CancellationToken cancellationToken = default)
     {
-        return await _context.Orders
+        var orders = await _context.Orders
             .AsNoTracking()
             .Include(o => o.User)
             .Include(o => o.OrderItems)
             .ThenInclude(oi => oi.Product)
             .Where(o => o.CreatedByUserId == userId)
             .OrderByDescending(o => o.CreatedAt)
-            .Select(o => MapToDto(o))
             .ToListAsync(cancellationToken);
+
+        // MapToDto is a C# method that cannot be translated to SQL,
+        // so we materialize the entities first, then map in memory.
+        return orders.Select(MapToDto).ToList();
     }
 
     public async Task<OrderDto> GetOrderByIdAsync(int id, string userId, bool isAdmin, CancellationToken cancellationToken = default)
@@ -149,7 +152,7 @@ public class OrderService : IOrderService
         o.User?.Email ?? "N/A",
         o.Status.ToString(),
         o.TotalAmount,
-        o.CreatedAt,
+        o.OrderDate,
         o.OrderItems.Select(i => new OrderItemDto(
             i.Id,
             i.ProductId,

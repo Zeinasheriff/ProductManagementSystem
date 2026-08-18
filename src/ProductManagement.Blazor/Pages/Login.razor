@@ -1,7 +1,9 @@
+@page "/"
 @page "/login"
 @using System.ComponentModel.DataAnnotations
 @inject IAuthService AuthService
 @inject NavigationManager NavManager
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Login</PageTitle>
 
@@ -42,13 +44,47 @@
                 </div>
             </div>
         </div>
+
+        <div class="card mt-3 shadow-sm">
+            <div class="card-header bg-light py-2"><strong>Demo Accounts</strong></div>
+            <div class="card-body py-2">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr>
+                            <td><span class="badge bg-danger">Admin</span></td>
+                            <td>admin@system.local</td>
+                            <td><code>Admin123!</code></td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge bg-primary">User</span></td>
+                            <td>user@system.local</td>
+                            <td><code>User123!</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
 
 @code {
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
     private LoginModel loginModel = new();
     private string errorMessage = string.Empty;
     private bool isSubmitting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // If the user is already logged in, don't show the login form again.
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            NavManager.NavigateTo(string.IsNullOrWhiteSpace(ReturnUrl) ? "/dashboard" : ReturnUrl, replace: true);
+        }
+    }
 
     private async Task HandleLogin()
     {
@@ -60,7 +96,8 @@
 
         if (response.Success)
         {
-            NavManager.NavigateTo("/", forceLoad: true);
+            var target = string.IsNullOrWhiteSpace(ReturnUrl) ? "/dashboard" : ReturnUrl;
+            NavManager.NavigateTo(target, forceLoad: true);
         }
         else
         {

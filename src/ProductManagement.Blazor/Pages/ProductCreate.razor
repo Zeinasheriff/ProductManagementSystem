@@ -1,9 +1,84 @@
 @page "/products/create"
-@using ProductManagement.Blazor.Shared
 @attribute [Authorize(Roles = "Admin")]
+@using System.ComponentModel.DataAnnotations
+@using ProductManagement.Application.DTOs
+@inject IProductClientService ProductService
+@inject NavigationManager NavManager
 
 <PageTitle>Create Product</PageTitle>
 
 <h3>Create Product</h3>
 
-<ProductForm IsEdit="false" />
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+
+<EditForm Model="@model" OnValidSubmit="HandleValidSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary class="text-danger" />
+
+    <div class="mb-3">
+        <label class="form-label">Name</label>
+        <InputText @bind-Value="model.Name" class="form-control" />
+        <ValidationMessage For="@(() => model.Name)" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Description</label>
+        <InputTextArea @bind-Value="model.Description" class="form-control" rows="3" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Price</label>
+        <InputNumber @bind-Value="model.Price" class="form-control" />
+        <ValidationMessage For="@(() => model.Price)" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Stock Quantity</label>
+        <InputNumber @bind-Value="model.StockQuantity" class="form-control" />
+        <ValidationMessage For="@(() => model.StockQuantity)" />
+    </div>
+    <button type="submit" class="btn btn-primary" disabled="@isSubmitting">@(isSubmitting ? "Saving..." : "Create")</button>
+    <a href="/products" class="btn btn-secondary">Cancel</a>
+</EditForm>
+
+@code {
+    private ProductFormModel model = new();
+    private string errorMessage = string.Empty;
+    private bool isSubmitting = false;
+
+    private async Task HandleValidSubmit()
+    {
+        errorMessage = string.Empty;
+        isSubmitting = true;
+
+        var request = new CreateProductRequest(model.Name, model.Description, model.Price, model.StockQuantity);
+        var success = await ProductService.Create(request);
+
+        isSubmitting = false;
+
+        if (success)
+        {
+            NavManager.NavigateTo("/products");
+        }
+        else
+        {
+            errorMessage = "Failed to create product. Please check your input and try again.";
+        }
+    }
+
+    private class ProductFormModel
+    {
+        [Required(ErrorMessage = "Product name is required.")]
+        [StringLength(150, ErrorMessage = "Name must not exceed 150 characters.")]
+        public string Name { get; set; } = string.Empty;
+
+        [StringLength(1000, ErrorMessage = "Description must not exceed 1000 characters.")]
+        public string Description { get; set; } = string.Empty;
+
+        [Range(0.01, double.MaxValue, ErrorMessage = "Price must be greater than zero.")]
+        public decimal Price { get; set; }
+
+        [Range(0, int.MaxValue, ErrorMessage = "Stock quantity cannot be negative.")]
+        public int StockQuantity { get; set; }
+    }
+}

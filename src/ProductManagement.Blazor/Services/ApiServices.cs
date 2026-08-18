@@ -33,7 +33,10 @@ public class AuthService : IAuthService
         if (response.IsSuccessStatusCode && result != null && result.Success)
         {
             await _localStorage.SetItemAsync("authToken", result.Token);
-            ((CustomAuthStateProvider)_authStateProvider).NotifyUserAuthentication(result.Token);
+            if (_authStateProvider is CustomAuthStateProvider customProvider)
+            {
+                customProvider.NotifyUserAuthentication(result.Token);
+            }
         }
 
         return result ?? new AuthResponse(false, "", "", "", "Failed to process authentication.");
@@ -42,14 +45,24 @@ public class AuthService : IAuthService
     public async Task<AuthResponse> Register(RegisterRequest request)
     {
         var response = await _http.PostAsJsonAsync("api/auth/register", request);
-        return await response.Content.ReadFromJsonAsync<AuthResponse>() 
+        return await response.Content.ReadFromJsonAsync<AuthResponse>()
                ?? new AuthResponse(false, "", "", "", "Registration failed.");
     }
 
     public async Task Logout()
     {
-        await _localStorage.RemoveItemAsync("authToken");
-        ((CustomAuthStateProvider)_authStateProvider).NotifyUserLogout();
+        // Always clear the token first so the JWT auth handler stops sending it.
+        try
+        {
+            await _localStorage.RemoveItemAsync("authToken");
+        }
+        finally
+        {
+            if (_authStateProvider is CustomAuthStateProvider customProvider)
+            {
+                customProvider.NotifyUserLogout();
+            }
+        }
     }
 }
 
@@ -124,6 +137,13 @@ public class OrderClientService : IOrderClientService
 
     public async Task<List<OrderDto>?> GetMyOrders()
     {
-        return await _http.GetFromJsonAsync<List<OrderDto>>("api/orders");
+        try
+        {
+            return await _http.GetFromJsonAsync<List<OrderDto>>("api/orders");
+        }
+        catch (Exception)
+        {
+            return new List<OrderDto>();
+        }
     }
 }

@@ -1,4 +1,6 @@
 ﻿@inherits LayoutComponentBase
+@using System.Security.Claims
+
 <div class="page">
     <div class="sidebar">
         <NavMenu />
@@ -6,6 +8,20 @@
 
     <main>
         <div class="top-row px-4">
+            <AuthorizeView>
+                <Authorized>
+                    <span class="text-muted me-3">
+                        <i class="bi bi-person-circle"></i>
+                        @GetDisplayName()
+                    </span>
+                    <a class="btn btn-sm btn-outline-secondary me-2" href="/profile">Profile</a>
+                    <a class="btn btn-sm btn-outline-danger text-danger" href="/logout">Logout</a>
+                </Authorized>
+                <NotAuthorized>
+                    <a class="btn btn-sm btn-outline-primary me-2" href="/login">Login</a>
+                    <a class="btn btn-sm btn-outline-secondary" href="/register">Register</a>
+                </NotAuthorized>
+            </AuthorizeView>
             <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
         </div>
 
@@ -14,3 +30,27 @@
         </article>
     </main>
 </div>
+
+@code {
+    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
+
+    private string displayName = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var firstName = user.FindFirst(ClaimTypes.GivenName)?.Value ?? string.Empty;
+            var lastName = user.FindFirst(ClaimTypes.Surname)?.Value ?? string.Empty;
+            var email = user.FindFirst(ClaimTypes.Email)?.Value ?? string.Empty;
+
+            displayName = string.IsNullOrWhiteSpace(firstName) && string.IsNullOrWhiteSpace(lastName)
+                ? email
+                : $"{firstName} {lastName}".Trim();
+        }
+    }
+
+    private string GetDisplayName() => string.IsNullOrWhiteSpace(displayName) ? "Account" : displayName;
+}

@@ -18,19 +18,19 @@ using ProductManagement.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("BlazorClientPolicy", policy =>
-    {
-        policy.WithOrigins("http://localhost:5017") // Allows Blazor frontend
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
-    });
-});
 // 1. Database Context
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlOptions => sqlOptions.UseCompatibilityLevel(120)));
+// NOTE: EF Core 8 translates `list.Contains(x)` (used in OrderService when
+// looking up ordered products) to SQL Server's OPENJSON(...) WITH (...) by
+// default, which requires database compatibility level 130+ (SQL Server 2016+).
+// Forcing compatibility level 120 here makes EF fall back to the classic
+// `WHERE Id IN (...)` syntax, which works on every supported SQL Server/LocalDB
+// version and fixes the "Incorrect syntax near the keyword 'WITH'" 500 error.
+// If your SQL Server instance is 2016+ you can safely remove this and instead
+// run: ALTER DATABASE ProductManagementDb SET COMPATIBILITY_LEVEL = 150;
 
 builder.Services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
 

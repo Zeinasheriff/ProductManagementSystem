@@ -1,6 +1,14 @@
-﻿@page "/"
+﻿@page "/dashboard"
+@attribute [Authorize]
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Dashboard</PageTitle>
+
+<div class="alert alert-success d-flex align-items-center">
+    <i class="bi bi-person-check me-2 fs-4"></i>
+    <div>
+        <strong>Welcome back, @GetDisplayName()!</strong>
+    </div>
+</div>
 
 <div class="text-center mb-5">
     <h1 class="display-4">Product Management System</h1>
@@ -22,14 +30,7 @@
             <div class="card-body text-center">
                 <h5 class="card-title">Create Order</h5>
                 <p class="card-text">Place an order with one or more products. Stock is validated automatically.</p>
-                <AuthorizeView>
-                    <Authorized>
-                        <a href="/orders/create" class="btn btn-success">Create Order</a>
-                    </Authorized>
-                    <NotAuthorized>
-                        <a href="/login" class="btn btn-success">Login to Order</a>
-                    </NotAuthorized>
-                </AuthorizeView>
+                <a href="/orders/create" class="btn btn-success">Create Order</a>
             </div>
         </div>
     </div>
@@ -38,38 +39,32 @@
             <div class="card-body text-center">
                 <h5 class="card-title">My Orders</h5>
                 <p class="card-text">View your order history, line items, and totals.</p>
-                <AuthorizeView>
-                    <Authorized>
-                        <a href="/orders" class="btn btn-info text-white">View Orders</a>
-                    </Authorized>
-                    <NotAuthorized>
-                        <a href="/register" class="btn btn-info text-white">Register</a>
-                    </NotAuthorized>
-                </AuthorizeView>
+                <a href="/orders" class="btn btn-info text-white">View Orders</a>
             </div>
         </div>
     </div>
 </div>
 
-<div class="card mt-4 shadow-sm">
-    <div class="card-header bg-light"><strong>Demo Accounts</strong></div>
-    <div class="card-body">
-        <table class="table table-sm mb-0">
-            <thead>
-                <tr><th>Role</th><th>Email</th><th>Password</th></tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td><span class="badge bg-danger">Admin</span></td>
-                    <td>admin@system.local</td>
-                    <td><code>Admin123!</code></td>
-                </tr>
-                <tr>
-                    <td><span class="badge bg-primary">User</span></td>
-                    <td>user@system.local</td>
-                    <td><code>User123!</code></td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</div>
+@code {
+    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
+
+    private string displayName = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var firstName = user.FindFirst(ClaimTypes.GivenName)?.Value ?? string.Empty;
+            var lastName = user.FindFirst(ClaimTypes.Surname)?.Value ?? string.Empty;
+            var email = user.FindFirst(ClaimTypes.Email)?.Value ?? string.Empty;
+
+            displayName = string.IsNullOrWhiteSpace(firstName) && string.IsNullOrWhiteSpace(lastName)
+                ? email
+                : $"{firstName} {lastName}".Trim();
+        }
+    }
+
+    private string GetDisplayName() => string.IsNullOrWhiteSpace(displayName) ? "there" : displayName;
+}

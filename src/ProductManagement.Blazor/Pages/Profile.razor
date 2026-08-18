@@ -1,0 +1,88 @@
+@page "/profile"
+@using System.Security.Claims
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavManager
+
+<PageTitle>My Profile</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        <div class="row justify-content-center mt-4">
+            <div class="col-md-6">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Account Details</h5>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-4">Full Name</dt>
+                            <dd class="col-sm-8">@displayName</dd>
+
+                            <dt class="col-sm-4">Email</dt>
+                            <dd class="col-sm-8">@email</dd>
+
+                            <dt class="col-sm-4">Role</dt>
+                            <dd class="col-sm-8">
+                                @if (isAdmin)
+                                {
+                                    <span class="badge bg-danger">Admin</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-primary">User</span>
+                                }
+                            </dd>
+                        </dl>
+                    </div>
+                    <div class="card-footer d-flex justify-content-between">
+                        <button class="btn btn-outline-primary" @onclick="GoToOrders">My Orders</button>
+                        <button class="btn btn-outline-danger" @onclick="Logout">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="alert alert-warning mt-4">
+            Please <a href="/login">log in</a> to view your profile.
+            <br />Don't have an account? <a href="/register">Register here</a>.
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Inject] private IAuthService AuthService { get; set; } = default!;
+
+    private string displayName = string.Empty;
+    private string email = string.Empty;
+    private bool isAdmin;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var firstName = user.FindFirst(ClaimTypes.GivenName)?.Value ?? string.Empty;
+            var lastName = user.FindFirst(ClaimTypes.Surname)?.Value ?? string.Empty;
+            email = user.FindFirst(ClaimTypes.Email)?.Value ?? string.Empty;
+
+            displayName = string.IsNullOrWhiteSpace(firstName) && string.IsNullOrWhiteSpace(lastName)
+                ? email
+                : $"{firstName} {lastName}".Trim();
+
+            isAdmin = user.IsInRole("Admin");
+        }
+    }
+
+    private void GoToOrders() => NavManager.NavigateTo("/orders");
+
+    private async Task Logout()
+    {
+        await AuthService.Logout();
+        // Wait for auth state to propagate, then navigate
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        NavManager.NavigateTo("/", forceLoad: true);
+    }
+}
