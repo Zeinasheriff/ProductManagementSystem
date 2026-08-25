@@ -1,81 +1,82 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">Product Management</a>
-        <AuthorizeView>
-            <Authorized>
-                <span class="navbar-text text-white me-3 user-greeting">
-                    <i class="bi bi-person-circle"></i>
-                    @GetDisplayName()
-                </span>
-            </Authorized>
-        </AuthorizeView>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-    </div>
+﻿<div class="nav-header">
+    <a href="/" class="brand">
+        <span class="brand-mark"><i class="bi bi-box-seam-fill"></i></span>
+        <span class="brand-text">Product<span>Hub</span></span>
+    </a>
 </div>
 
-<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
+<button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+    <span class="navbar-toggler-icon"></span>
+</button>
+
+<div class="@NavMenuCssClass nav-scrollable" @onclick="CloseOnNavigate">
     <nav class="flex-column">
         <AuthorizeView>
             <Authorized>
+                <div class="nav-section">Overview</div>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="dashboard">
-                        <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+                    <NavLink class="nav-link" href="dashboard" Match="NavLinkMatch.Prefix">
+                        <i class="bi bi-house-door"></i><span>Home</span>
                     </NavLink>
                 </div>
             </Authorized>
         </AuthorizeView>
+
+        <div class="nav-section">Catalog</div>
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="products">
-                <span class="bi bi-box-seam-fill-nav-menu" aria-hidden="true"></span> Products
+            <NavLink class="nav-link" href="products" Match="NavLinkMatch.Prefix">
+                <i class="bi bi-box-seam"></i><span>Products</span>
             </NavLink>
         </div>
-        <AuthorizeView>
-            <Authorized>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="orders">
-                        <span class="bi bi-cart-fill-nav-menu" aria-hidden="true"></span> My Orders
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="orders/create">
-                        <span class="bi bi-plus-circle-fill-nav-menu" aria-hidden="true"></span> Create Order
-                    </NavLink>
-                </div>
-            </Authorized>
-        </AuthorizeView>
         <AuthorizeView Roles="Admin">
             <Authorized>
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="products/create">
-                        <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Add Product
+                        <i class="bi bi-plus-square"></i><span>Add Product</span>
                     </NavLink>
                 </div>
             </Authorized>
         </AuthorizeView>
+
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-section">Orders</div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="orders" Match="NavLinkMatch.Prefix">
+                        <i class="bi bi-receipt"></i><span>My Orders</span>
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="orders/create">
+                        <i class="bi bi-cart-plus"></i><span>Create Order</span>
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
+        <div class="nav-section">Account</div>
         <AuthorizeView>
             <Authorized>
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="profile">
-                        <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> My Profile
+                        <i class="bi bi-person"></i><span>My Profile</span>
                     </NavLink>
                 </div>
                 <div class="nav-item px-3">
-                    <button class="btn btn-link nav-link" @onclick="Logout">
-                        <span class="bi bi-box-arrow-right-nav-menu" aria-hidden="true"></span> Logout
+                    <button class="btn btn-link nav-link nav-logout" @onclick="Logout">
+                        <i class="bi bi-box-arrow-right"></i><span>Logout</span>
                     </button>
                 </div>
             </Authorized>
             <NotAuthorized>
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="login">
-                        <span class="bi bi-box-arrow-in-right-nav-menu" aria-hidden="true"></span> Login
+                        <i class="bi bi-box-arrow-in-right"></i><span>Login</span>
                     </NavLink>
                 </div>
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="register">
-                        <span class="bi bi-person-plus-fill-nav-menu" aria-hidden="true"></span> Register
+                        <i class="bi bi-person-plus"></i><span>Register</span>
                     </NavLink>
                 </div>
             </NotAuthorized>
@@ -86,64 +87,22 @@
 @code {
     [Inject] private IAuthService AuthService { get; set; } = default!;
     [Inject] private NavigationManager NavManager { get; set; } = default!;
-    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
 
     private bool collapseNavMenu = true;
-    private string displayName = string.Empty;
 
     private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
 
-    protected override async Task OnInitializedAsync()
+    private void ToggleNavMenu() => collapseNavMenu = !collapseNavMenu;
+
+    // Auto-collapse the mobile menu after choosing an entry.
+    private void CloseOnNavigate()
     {
-        await LoadUser();
-        AuthStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
-    }
-
-    private void OnAuthStateChanged(Task<AuthenticationState> task)
-    {
-        _ = InvokeAsync(async () =>
-        {
-            await LoadUser();
-            StateHasChanged();
-        });
-    }
-
-    private async Task LoadUser()
-    {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
-
-        if (user.Identity?.IsAuthenticated == true)
-        {
-            var firstName = user.FindFirst(ClaimTypes.GivenName)?.Value ?? string.Empty;
-            var lastName = user.FindFirst(ClaimTypes.Surname)?.Value ?? string.Empty;
-            var email = user.FindFirst(ClaimTypes.Email)?.Value ?? string.Empty;
-
-            displayName = string.IsNullOrWhiteSpace(firstName) && string.IsNullOrWhiteSpace(lastName)
-                ? email
-                : $"{firstName} {lastName}".Trim();
-        }
-        else
-        {
-            displayName = string.Empty;
-        }
-    }
-
-    private string GetDisplayName() => string.IsNullOrWhiteSpace(displayName) ? "Account" : displayName;
-
-    private void ToggleNavMenu()
-    {
-        collapseNavMenu = !collapseNavMenu;
+        if (!collapseNavMenu) collapseNavMenu = true;
     }
 
     private async Task Logout()
     {
         await AuthService.Logout();
         NavManager.NavigateTo("/", forceLoad: true);
-    }
-
-    public void Dispose()
-    {
-        AuthStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
     }
 }

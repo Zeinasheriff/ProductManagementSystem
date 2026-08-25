@@ -1,76 +1,103 @@
 @page "/products"
 @inject IProductClientService ProductService
-@inject NavigationManager NavManager
 
-<h3>Product Catalog</h3>
+<PageTitle>Products · ProductHub</PageTitle>
 
-<div class="row mb-3">
-    <div class="col-md-6">
-        <input type="text" class="form-control" placeholder="Search by name..." @bind="searchQuery" @bind:event="oninput" @onkeyup="HandleSearch" />
+<div class="page-header">
+    <div>
+        <h1>Product Catalog</h1>
+        <p>Browse the catalog and check live stock levels.</p>
     </div>
     <AuthorizeView Roles="Admin">
         <Authorized>
-            <div class="col-md-6 text-end">
-                <button class="btn btn-primary" @onclick="CreateNew">Create Product</button>
-            </div>
+            <a href="/products/create" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Product</a>
         </Authorized>
     </AuthorizeView>
 </div>
 
+<div class="toolbar">
+    <div class="search-box input-group">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input type="text" class="form-control" placeholder="Search by name…" @bind="searchQuery" @bind:event="oninput" @onkeyup="HandleSearch" />
+    </div>
+    @if (!loading && pagedResult != null && pagedResult.TotalCount > 0)
+    {
+        <span class="text-muted" style="font-size:.85rem;">@pagedResult!.TotalCount result(s)</span>
+    }
+</div>
+
 @if (loading)
 {
-    <p><em>Loading products...</em></p>
+    <div class="card"><div class="loading-wrap"><div class="spinner-border text-primary"></div><p class="mt-3 mb-0">Loading products…</p></div></div>
 }
 else if (pagedResult == null || !pagedResult.Items.Any())
 {
-    <p>No products found.</p>
+    <div class="empty-state">
+        <div class="empty-icon"><i class="bi bi-inbox"></i></div>
+        <h4>No products found</h4>
+        <p>@(string.IsNullOrWhiteSpace(searchQuery) ? "The catalog is empty." : $"Nothing matches \"{searchQuery}\".")</p>
+    </div>
 }
 else
 {
-    <table class="table table-striped table-hover">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Description</th>
-                <th>Price</th>
-                <th>Stock</th>
-                <th>Status</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var p in pagedResult.Items)
-            {
-                <tr>
-                    <td>@p.Name</td>
-                    <td>@p.Description</td>
-                    <td>@p.Price.ToString("C")</td>
-                    <td>@p.StockQuantity</td>
-                    <td>
-                        <span class="badge @(p.IsActive ? "bg-success" : "bg-secondary")">
-                            @(p.IsActive ? "Active" : "Inactive")
-                        </span>
-                    </td>
-                    <td>
-                        <AuthorizeView Roles="Admin">
-                            <Authorized>
-                                <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => EditProduct(p.Id)">Edit</button>
-                                @if (p.IsActive)
+    <div class="card overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-modern align-middle">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Price</th>
+                        <th>Stock</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in pagedResult.Items)
+                    {
+                        <tr>
+                            <td>
+                                <div class="fw-semibold text-dark">@p.Name</div>
+                                @if (!string.IsNullOrWhiteSpace(p.Description))
                                 {
-                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeactivateProduct(p.Id)">Deactivate</button>
+                                    <div class="text-muted small text-truncate" style="max-width:340px;" title="@p.Description">@p.Description</div>
                                 }
-                            </Authorized>
-                        </AuthorizeView>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+                            </td>
+                            <td class="fw-semibold">@p.Price.ToString("C")</td>
+                            <td>@GetStockBadge(p)</td>
+                            <td><span class="badge @(p.IsActive ? "pill-active" : "pill-inactive")">@(p.IsActive ? "Active" : "Inactive")</span></td>
+                            <td class="text-end">
+                                <AuthorizeView Roles="Admin">
+                                    <Authorized>
+                                        <a href="/products/edit/@p.Id" class="btn btn-sm btn-outline-secondary me-1" title="Edit"><i class="bi bi-pencil"></i></a>
+                                        @if (p.IsActive)
+                                        {
+                                            if (pendingDeactivateId == p.Id)
+                                            {
+                                                <button class="btn btn-sm btn-danger me-1" @onclick="() => DeactivateProduct(p.Id)"><i class="bi bi-check-lg me-1"></i>Confirm</button>
+                                                <button class="btn btn-sm btn-outline-secondary" title="Cancel" @onclick="CancelDeactivate"><i class="bi bi-x-lg"></i></button>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-sm btn-outline-danger" title="Deactivate" @onclick="() => pendingDeactivateId = p.Id"><i class="bi bi-archive"></i></button>
+                                            }
+                                        }
+                                    </Authorized>
+                                </AuthorizeView>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
 
-    <div class="d-flex justify-content-between">
-        <button class="btn btn-outline-primary" disabled="@(!pagedResult.HasPreviousPage)" @onclick="PreviousPage">Previous</button>
-        <span>Page @pagedResult.PageNumber of @pagedResult.TotalPages</span>
-        <button class="btn btn-outline-primary" disabled="@(!pagedResult.HasNextPage)" @onclick="NextPage">Next</button>
+    <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+        <span class="text-muted" style="font-size:.85rem;">Page @pagedResult.PageNumber of @(pagedResult.TotalPages == 0 ? 1 : pagedResult.TotalPages)</span>
+        <div class="d-flex gap-2">
+            <button class="page-btn" disabled="@(!pagedResult.HasPreviousPage)" @onclick="PreviousPage"><i class="bi bi-chevron-left"></i> Previous</button>
+            <button class="page-btn" disabled="@(!pagedResult.HasNextPage)" @onclick="NextPage">Next <i class="bi bi-chevron-right"></i></button>
+        </div>
     </div>
 }
 
@@ -79,6 +106,7 @@ else
     private string searchQuery = string.Empty;
     private int currentPage = 1;
     private bool loading = true;
+    private int? pendingDeactivateId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -88,8 +116,21 @@ else
     private async Task LoadProducts()
     {
         loading = true;
-        pagedResult = await ProductService.SearchProducts(searchQuery, currentPage, 10);
-        loading = false;
+        try
+        {
+            pagedResult = await ProductService.SearchProducts(searchQuery, currentPage, 10);
+        }
+        finally
+        {
+            loading = false;
+        }
+
+        // Keep the page cursor valid after filtering shrinks the result set.
+        if (pagedResult is { TotalCount: > 0 } && currentPage > pagedResult.TotalPages)
+        {
+            currentPage = pagedResult.TotalPages;
+            await LoadProducts();
+        }
     }
 
     private async Task HandleSearch()
@@ -116,14 +157,28 @@ else
         }
     }
 
-    private void CreateNew() => NavManager.NavigateTo("/products/create");
-    private void EditProduct(int id) => NavManager.NavigateTo($"/products/edit/{id}");
+    private void CancelDeactivate() => pendingDeactivateId = null;
 
     private async Task DeactivateProduct(int id)
     {
-        if (await ProductService.Deactivate(id))
+        var result = await ProductService.Deactivate(id);
+        pendingDeactivateId = null;
+        if (result.Success)
         {
             await LoadProducts();
         }
+    }
+
+    private static MarkupString GetStockBadge(ProductDto p)
+    {
+        if (p.StockQuantity <= 0)
+        {
+            return new MarkupString("<span class=\"badge pill-out\">Out of stock</span>");
+        }
+        if (p.StockQuantity <= 10)
+        {
+            return new MarkupString($"<span class=\"badge pill-low\">Low · {p.StockQuantity}</span>");
+        }
+        return new MarkupString($"<span class=\"badge pill-active\">{p.StockQuantity} in stock</span>");
     }
 }

@@ -3,59 +3,100 @@
 @inject IAuthService AuthService
 @inject NavigationManager NavManager
 
-<PageTitle>Register</PageTitle>
+<PageTitle>Create Account · ProductHub</PageTitle>
 
-<div class="row justify-content-center mt-5">
-    <div class="col-md-5">
-        <div class="card shadow-sm">
-            <div class="card-header bg-primary text-white">
-                <h4 class="mb-0">Create Account</h4>
-            </div>
-            <div class="card-body">
-                @if (!string.IsNullOrEmpty(errorMessage))
-                {
-                    <div class="alert alert-danger">@errorMessage</div>
-                }
-
-                <EditForm Model="@registerModel" OnValidSubmit="HandleRegister">
-                    <DataAnnotationsValidator />
-                    <ValidationSummary />
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">First Name</label>
-                            <InputText @bind-Value="registerModel.FirstName" class="form-control" placeholder="John" />
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Last Name</label>
-                            <InputText @bind-Value="registerModel.LastName" class="form-control" placeholder="Doe" />
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Email</label>
-                        <InputText @bind-Value="registerModel.Email" class="form-control" placeholder="you@example.com" />
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Password</label>
-                        <InputText type="password" @bind-Value="registerModel.Password" class="form-control" placeholder="At least 8 chars with upper, lower, digit & symbol" />
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Confirm Password</label>
-                        <InputText type="password" @bind-Value="registerModel.ConfirmPassword" class="form-control" placeholder="Re-enter password" />
-                    </div>
-
-                    <button type="submit" class="btn btn-primary w-100" disabled="@isSubmitting">
-                        @(isSubmitting ? "Creating account..." : "Register")
-                    </button>
-                </EditForm>
-
-                <div class="mt-3 text-center">
-                    <span>Already have an account? </span>
-                    <a href="/login">Login</a>
+<div class="auth-wrapper">
+    <div class="card auth-card shadow-lg">
+        <div class="auth-head">
+            <i class="bi bi-person-plus-fill"></i>
+            <h2>Create your account</h2>
+            <p>Join and start ordering in minutes</p>
+        </div>
+        <div class="card-body p-4">
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger d-flex align-items-center gap-2">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <span>@errorMessage</span>
                 </div>
+            }
+
+            <EditForm Model="@registerModel" OnValidSubmit="HandleRegister">
+                <DataAnnotationsValidator />
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">First Name</label>
+                        <InputText @bind-Value="registerModel.FirstName" class="form-control" placeholder="Jane" autocomplete="given-name" />
+                        <ValidationMessage For="@(() => registerModel.FirstName)" />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Last Name</label>
+                        <InputText @bind-Value="registerModel.LastName" class="form-control" placeholder="Doe" autocomplete="family-name" />
+                        <ValidationMessage For="@(() => registerModel.LastName)" />
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Email</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                        <InputText @bind-Value="registerModel.Email" class="form-control" placeholder="you@example.com" autocomplete="email" />
+                    </div>
+                    <ValidationMessage For="@(() => registerModel.Email)" />
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label">Password</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                        <InputText type="@(showPassword ? "text" : "password")" @bind-Value="registerModel.Password" class="form-control" placeholder="Create a strong password" autocomplete="new-password" />
+                        <button type="button" class="btn input-group-text password-toggle"
+                                @onclick="() => showPassword = !showPassword"
+                                title="@(showPassword ? "Hide password" : "Show password")"
+                                aria-label="Toggle password visibility"
+                                aria-pressed="@showPassword">
+                            <i class="bi @(showPassword ? "bi-eye-slash" : "bi-eye")"></i>
+                        </button>
+                    </div>
+                    <ValidationMessage For="@(() => registerModel.Password)" />
+                </div>
+
+                <div class="pw-hint mb-3">
+                    <i class="bi bi-shield-check me-1"></i>
+                    At least 8 characters, with an uppercase letter, a lowercase letter, a digit and a symbol.
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label">Confirm Password</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+                        <InputText type="@(showConfirmPassword ? "text" : "password")" @bind-Value="registerModel.ConfirmPassword" class="form-control" placeholder="Re-enter password" autocomplete="new-password" />
+                        <button type="button" class="btn input-group-text password-toggle"
+                                @onclick="() => showConfirmPassword = !showConfirmPassword"
+                                title="@(showConfirmPassword ? "Hide password" : "Show password")"
+                                aria-label="Toggle confirm password visibility"
+                                aria-pressed="@showConfirmPassword">
+                            <i class="bi @(showConfirmPassword ? "bi-eye-slash" : "bi-eye")"></i>
+                        </button>
+                    </div>
+                    <ValidationMessage For="@(() => registerModel.ConfirmPassword)" />
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100" disabled="@isSubmitting">
+                    @if (isSubmitting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span><text>Creating account…</text>
+                    }
+                    else
+                    {
+                        <text><i class="bi bi-person-plus me-1"></i>Create Account</text>
+                    }
+                </button>
+            </EditForm>
+
+            <div class="text-center mt-3 text-muted" style="font-size:.9rem;">
+                Already have an account? <a href="/login"><strong>Sign in</strong></a>
             </div>
         </div>
     </div>
@@ -65,24 +106,32 @@
     private RegisterModel registerModel = new();
     private string errorMessage = string.Empty;
     private bool isSubmitting = false;
+    private bool showPassword = false;
+    private bool showConfirmPassword = false;
 
     private async Task HandleRegister()
     {
         errorMessage = string.Empty;
         isSubmitting = true;
 
-        var response = await AuthService.Register(new RegisterRequest(
-            registerModel.Email, registerModel.Password,
-            registerModel.FirstName, registerModel.LastName));
-        isSubmitting = false;
+        try
+        {
+            var response = await AuthService.Register(new RegisterRequest(
+                registerModel.Email, registerModel.Password,
+                registerModel.FirstName, registerModel.LastName));
 
-        if (response.Success)
-        {
-            NavManager.NavigateTo("/login");
+            if (response.Success)
+            {
+                NavManager.NavigateTo($"/login?returnUrl=%2Fdashboard");
+            }
+            else
+            {
+                errorMessage = response.Message;
+            }
         }
-        else
+        finally
         {
-            errorMessage = response.Message;
+            isSubmitting = false;
         }
     }
 

@@ -2,44 +2,68 @@
 @attribute [Authorize]
 @inject IOrderClientService OrderService
 
-<PageTitle>My Orders</PageTitle>
+<PageTitle>My Orders · ProductHub</PageTitle>
 
-<h3>My Orders</h3>
+<div class="page-header">
+    <div>
+        <h1>My Orders</h1>
+        <p>Your complete order history.</p>
+    </div>
+    <a href="/orders/create" class="btn btn-primary"><i class="bi bi-cart-plus me-1"></i>New Order</a>
+</div>
 
 @if (loading)
 {
-    <p><em>Loading orders...</em></p>
+    <div class="card"><div class="loading-wrap"><div class="spinner-border text-primary"></div><p class="mt-3 mb-0">Loading orders…</p></div></div>
 }
 else if (orders == null || !orders.Any())
 {
-    <div class="alert alert-info">
-        You have no orders yet. <a href="/orders/create">Create your first order</a>.
+    <div class="empty-state">
+        <div class="empty-icon"><i class="bi bi-receipt-cutoff"></i></div>
+        <h4>No orders yet</h4>
+        <p>When you place an order it will show up here with its line items and total.</p>
+        <a href="/orders/create" class="btn btn-primary"><i class="bi bi-cart-plus me-1"></i>Create your first order</a>
     </div>
 }
 else
 {
-    <div class="mb-3">
-        <a href="/orders/create" class="btn btn-primary">Create New Order</a>
+    var totalCount = orders.Count;
+    var totalSpent = orders.Sum(o => o.TotalAmount);
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="card stat-card">
+                <span class="stat-icon green"><i class="bi bi-receipt"></i></span>
+                <div>
+                    <div class="stat-value">@totalCount.ToString("N0")</div>
+                    <div class="stat-label">Orders placed</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card stat-card">
+                <span class="stat-icon amber"><i class="bi bi-cash-stack"></i></span>
+                <div>
+                    <div class="stat-value">@totalSpent.ToString("C")</div>
+                    <div class="stat-label">Total spent</div>
+                </div>
+            </div>
+        </div>
     </div>
 
     @foreach (var order in orders)
     {
-        <div class="card mb-3">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <strong>Order #@order.Id</strong>
-                <span class="badge @(order.Status == "Completed" ? "bg-success" : "bg-warning")">@order.Status</span>
-            </div>
-            <div class="card-body">
-                <div class="row mb-2">
-                    <div class="col-md-6">
-                        <strong>Date:</strong> @order.OrderDate.ToLocalTime().ToString("g")
-                    </div>
-                    <div class="col-md-6 text-end">
-                        <strong>Total:</strong> <span class="text-success fw-bold">@order.TotalAmount.ToString("C")</span>
-                    </div>
+        <div class="card mb-3 overflow-hidden">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-receipt text-primary"></i>
+                    <strong>Order #@order.Id</strong>
+                    <span class="text-muted" style="font-size:.85rem;">· @order.OrderDate.ToLocalTime().ToString("g")</span>
                 </div>
-
-                <table class="table table-sm table-striped mb-0">
+                <span class="@GetStatusBadgeClass(order.Status)">@order.Status</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-modern mb-0">
                     <thead>
                         <tr>
                             <th>Product</th>
@@ -59,6 +83,12 @@ else
                             </tr>
                         }
                     </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="3" class="text-end fw-bold" style="border-top:1px solid var(--pm-border);">Total</td>
+                            <td class="text-end fw-bold text-success" style="border-top:1px solid var(--pm-border);">@order.TotalAmount.ToString("C")</td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>
@@ -71,7 +101,21 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        orders = await OrderService.GetMyOrders();
-        loading = false;
+        try
+        {
+            orders = await OrderService.GetMyOrders();
+        }
+        finally
+        {
+            loading = false;
+        }
     }
+
+    private static string GetStatusBadgeClass(string status) => status switch
+    {
+        "Completed" => "badge pill-active",
+        "Cancelled" => "badge pill-out",
+        "Pending" => "badge pill-low",
+        _ => "badge pill-info"
+    };
 }

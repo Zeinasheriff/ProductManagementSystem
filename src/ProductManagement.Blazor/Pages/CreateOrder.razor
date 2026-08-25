@@ -4,71 +4,119 @@
 @inject IOrderClientService OrderService
 @inject NavigationManager NavManager
 
-<h3>Create New Order</h3>
+<PageTitle>Create Order · ProductHub</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Create Order</h1>
+        <p>Pick products, adjust quantities and place your order.</p>
+    </div>
+</div>
 
 @if (!string.IsNullOrEmpty(errorMessage))
 {
-    <div class="alert alert-danger">@errorMessage</div>
+    <div class="alert alert-danger d-flex align-items-center gap-2">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <span>@errorMessage</span>
+    </div>
 }
 
-<div class="row">
-    <div class="col-md-7">
-        <h5>Available Products</h5>
+<div class="row g-4">
+    <div class="col-lg-7">
+        <h5 class="fw-bold text-dark mb-3">Available Products</h5>
+
         @if (products == null)
         {
-            <p>Loading catalog...</p>
+            <div class="card"><div class="loading-wrap"><div class="spinner-border text-primary"></div><p class="mt-3 mb-0">Loading catalog…</p></div></div>
         }
         else
         {
-            <div class="list-group">
-                @foreach (var p in products.Items.Where(x => x.IsActive && x.StockQuantity > 0))
+            var available = products.Items.Where(x => x.IsActive && x.StockQuantity > 0).ToList();
+
+            if (available.Count == 0)
+            {
+                <div class="empty-state">
+                    <div class="empty-icon"><i class="bi bi-inbox"></i></div>
+                    <h4>Nothing in stock right now</h4>
+                    <p>There are no active products available to order.</p>
+                    <a href="/products" class="btn btn-outline-primary">Back to catalog</a>
+                </div>
+            }
+            else
+            {
+                @foreach (var p in available)
                 {
-                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div class="pick-card">
                         <div>
-                            <strong>@p.Name</strong> - @p.Price.ToString("C")
-                            <br /><small class="text-muted">Available Stock: @p.StockQuantity</small>
+                            <div class="pick-name">@p.Name</div>
+                            <div class="pick-meta">
+                                <strong>@p.Price.ToString("C")</strong> · @p.StockQuantity in stock
+                            </div>
                         </div>
-                        <button class="btn btn-sm btn-primary" @onclick="() => AddToCart(p)">Add to Order</button>
+                        <button class="btn btn-sm btn-primary flex-shrink-0" @onclick="() => AddToCart(p)">
+                            <i class="bi bi-plus-lg me-1"></i>Add
+                        </button>
                     </div>
                 }
-            </div>
+            }
         }
     </div>
 
-    <div class="col-md-5">
-        <h5>Order Items</h5>
-        @if (!cart.Any())
-        {
-            <p class="text-muted">No items selected.</p>
-        }
-        else
-        {
-            <ul class="list-group mb-3">
-                @foreach (var item in cart)
-                {
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <div>
-                            <strong>@item.ProductName</strong>
-                            <br />@item.UnitPrice.ToString("C") x 
-                            <input type="number" style="width:60px;" min="1" max="@item.MaxStock" @bind="item.Quantity" @bind:after="CalculateTotal" />
-                        </div>
-                        <div>
-                            <span>@((item.UnitPrice * item.Quantity).ToString("C"))</span>
-                            <button class="btn btn-sm btn-danger ms-2" @onclick="() => RemoveFromCart(item)">X</button>
-                        </div>
-                    </li>
-                }
-            </ul>
-
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h4>Total (Estimated):</h4>
-                <h4>@estimatedTotal.ToString("C")</h4>
+    <div class="col-lg-5">
+        <div class="card sticky-top" style="top: 84px;">
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="bi bi-cart3 text-primary"></i> Order Summary
             </div>
+            <div class="card-body">
+                @if (!cart.Any())
+                {
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-cart-x fs-1 d-block mb-2"></i>
+                        Your cart is empty.<br />Add products to get started.
+                    </div>
+                }
+                else
+                {
+                    @foreach (var item in cart)
+                    {
+                        <div class="d-flex justify-content-between align-items-center border-bottom py-2 gap-2">
+                            <div class="min-w-0">
+                                <div class="pick-name text-truncate">@item.ProductName</div>
+                                <div class="pick-meta">@item.UnitPrice.ToString("C") each</div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                                <div class="qty-stepper">
+                                    <button title="Decrease" @onclick="() => ChangeQty(item, -1)">−</button>
+                                    <input type="number" min="1" max="@item.MaxStock" value="@item.Quantity" @onchange="e => SetQty(item, e.Value?.ToString())" />
+                                    <button title="Increase" @onclick="() => ChangeQty(item, 1)">+</button>
+                                </div>
+                                <span class="fw-semibold">@((item.UnitPrice * item.Quantity).ToString("C"))</span>
+                                <button class="btn btn-sm btn-outline-danger" title="Remove" @onclick="() => RemoveFromCart(item)"><i class="bi bi-trash"></i></button>
+                            </div>
+                        </div>
+                    }
 
-            <button class="btn btn-success w-100" @onclick="SubmitOrder" disabled="@isSubmitting">
-                @(isSubmitting ? "Processing..." : "Place Order")
-            </button>
-        }
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <span class="text-muted">Estimated Total</span>
+                        <span class="summary-total">@estimatedTotal.ToString("C")</span>
+                    </div>
+
+                    <button class="btn btn-success w-100 mt-3" @onclick="SubmitOrder" disabled="@isSubmitting">
+                        @if (isSubmitting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span><text>Processing…</text>
+                        }
+                        else
+                        {
+                            <text><i class="bi bi-bag-check me-1"></i>Place Order</text>
+                        }
+                    </button>
+                    <div class="text-center mt-2 text-muted" style="font-size:.8rem;">
+                        Stock and totals are validated server-side on submit.
+                    </div>
+                }
+            </div>
+        </div>
     </div>
 </div>
 
@@ -86,22 +134,44 @@
 
     private void AddToCart(ProductDto product)
     {
+        errorMessage = string.Empty;
+
         var existing = cart.FirstOrDefault(c => c.ProductId == product.Id);
         if (existing == null)
         {
-            cart.Add(new CartItem
+            if (product.StockQuantity > 0)
             {
-                ProductId = product.Id,
-                ProductName = product.Name,
-                UnitPrice = product.Price,
-                MaxStock = product.StockQuantity,
-                Quantity = 1
-            });
+                cart.Add(new CartItem
+                {
+                    ProductId = product.Id,
+                    ProductName = product.Name,
+                    UnitPrice = product.Price,
+                    MaxStock = product.StockQuantity,
+                    Quantity = 1
+                });
+            }
         }
-        else if (existing.Quantity < product.StockQuantity)
+        else if (existing.Quantity < existing.MaxStock)
         {
             existing.Quantity++;
         }
+
+        CalculateTotal();
+    }
+
+    private void ChangeQty(CartItem item, int delta)
+    {
+        item.Quantity = Math.Clamp(item.Quantity + delta, 1, Math.Max(1, item.MaxStock));
+        CalculateTotal();
+    }
+
+    private void SetQty(CartItem item, string? rawValue)
+    {
+        if (!int.TryParse(rawValue, out var qty))
+        {
+            qty = 1;
+        }
+        item.Quantity = Math.Clamp(qty, 1, Math.Max(1, item.MaxStock));
         CalculateTotal();
     }
 
@@ -118,23 +188,36 @@
 
     private async Task SubmitOrder()
     {
+        if (!cart.Any())
+        {
+            return;
+        }
+
         errorMessage = string.Empty;
         isSubmitting = true;
 
-        var request = new CreateOrderRequest(
-            cart.Select(c => new CreateOrderItemRequest(c.ProductId, c.Quantity)).ToList()
-        );
-
-        var result = await OrderService.CreateOrder(request);
-        isSubmitting = false;
-
-        if (result != null)
+        try
         {
-            NavManager.NavigateTo("/orders");
+            var request = new CreateOrderRequest(
+                cart.Select(c => new CreateOrderItemRequest(c.ProductId, c.Quantity)).ToList());
+
+            var (order, error) = await OrderService.CreateOrder(request);
+
+            if (order != null)
+            {
+                NavManager.NavigateTo("/orders");
+            }
+            else
+            {
+                // Surface the server-side business error (e.g. insufficient stock).
+                errorMessage = string.IsNullOrWhiteSpace(error)
+                    ? "Order submission failed. Please check stock availability and try again."
+                    : error;
+            }
         }
-        else
+        finally
         {
-            errorMessage = "Order submission failed. Check stock availability or try again.";
+            isSubmitting = false;
         }
     }
 

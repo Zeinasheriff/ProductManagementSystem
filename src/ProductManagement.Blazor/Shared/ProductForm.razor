@@ -2,58 +2,81 @@
 @inject IProductClientService ProductService
 @inject NavigationManager NavManager
 
-@if (IsEdit && loading)
-{
-    <p><em>Loading product...</em></p>
-}
-else
-{
-    @if (!string.IsNullOrEmpty(errorMessage))
-    {
-        <div class="alert alert-danger">@errorMessage</div>
-    }
-
-    <EditForm Model="@model" OnValidSubmit="HandleSubmit">
-        <DataAnnotationsValidator />
-        <ValidationSummary />
-
-        <div class="mb-3">
-            <label class="form-label">Name</label>
-            <InputText @bind-Value="model.Name" class="form-control" placeholder="Product name" />
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label">Description</label>
-            <InputTextArea @bind-Value="model.Description" class="form-control" rows="3" placeholder="Product description" />
-        </div>
-
-        <div class="row">
-            <div class="col-md-6 mb-3">
-                <label class="form-label">Price</label>
-                <InputNumber @bind-Value="model.Price" class="form-control" />
-            </div>
-            <div class="col-md-6 mb-3">
-                <label class="form-label">Stock Quantity</label>
-                <InputNumber @bind-Value="model.StockQuantity" class="form-control" />
-            </div>
-        </div>
-
-        @if (IsEdit)
+<div class="card">
+    <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-box-seam text-primary"></i>
+        @(IsEdit ? "Edit Product" : "New Product")
+    </div>
+    <div class="card-body p-4">
+        @if (IsEdit && loading)
         {
-            <div class="mb-3 form-check">
-                <InputCheckbox @bind-Value="model.IsActive" class="form-check-input" id="isActive" />
-                <label class="form-check-label" for="isActive">Active</label>
-            </div>
+            <div class="loading-wrap"><div class="spinner-border text-primary"></div><p class="mt-3 mb-0">Loading product…</p></div>
         }
+        else
+        {
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger d-flex align-items-center gap-2">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <span>@errorMessage</span>
+                </div>
+            }
 
-        <div class="d-flex gap-2">
-            <button type="submit" class="btn btn-primary" disabled="@isSubmitting">
-                @(isSubmitting ? "Saving..." : (IsEdit ? "Update Product" : "Create Product"))
-            </button>
-            <button type="button" class="btn btn-secondary" @onclick="Cancel">Cancel</button>
-        </div>
-    </EditForm>
-}
+            <EditForm Model="@model" OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
+
+                <div class="mb-3">
+                    <label class="form-label">Name</label>
+                    <InputText @bind-Value="model.Name" class="form-control" placeholder="Product name" />
+                    <ValidationMessage For="@(() => model.Name)" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Description</label>
+                    <InputTextArea @bind-Value="model.Description" class="form-control" rows="3" placeholder="Describe the product…" />
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Price</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <InputNumber @bind-Value="model.Price" class="form-control" />
+                        </div>
+                        <ValidationMessage For="@(() => model.Price)" />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Stock Quantity</label>
+                        <InputNumber @bind-Value="model.StockQuantity" class="form-control" />
+                        <ValidationMessage For="@(() => model.StockQuantity)" />
+                    </div>
+                </div>
+
+                @if (IsEdit)
+                {
+                    <div class="mb-3 form-check form-switch">
+                        <InputCheckbox @bind-Value="model.IsActive" class="form-check-input" role="switch" id="isActive" />
+                        <label class="form-check-label" for="isActive">Active (visible to customers)</label>
+                    </div>
+                }
+
+                <div class="d-flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-primary" disabled="@isSubmitting">
+                        @if (isSubmitting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span><text>Saving…</text>
+                        }
+                        else
+                        {
+                            <text><i class="bi bi-check-lg me-1"></i>@(IsEdit ? "Update Product" : "Create Product")</text>
+                        }
+                    </button>
+                    <a href="/products" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </EditForm>
+        }
+    </div>
+</div>
 
 @code {
     [Parameter] public int? ProductId { get; set; }
@@ -69,23 +92,29 @@ else
         if (IsEdit && ProductId.HasValue)
         {
             loading = true;
-            var product = await ProductService.GetById(ProductId.Value);
-            loading = false;
-
-            if (product == null)
+            try
             {
-                errorMessage = "Product not found.";
-                return;
+                var product = await ProductService.GetById(ProductId.Value);
+
+                if (product == null)
+                {
+                    errorMessage = "Product not found.";
+                    return;
+                }
+
+                model = new ProductFormModel
+                {
+                    Name = product.Name,
+                    Description = product.Description,
+                    Price = product.Price,
+                    StockQuantity = product.StockQuantity,
+                    IsActive = product.IsActive
+                };
             }
-
-            model = new ProductFormModel
+            finally
             {
-                Name = product.Name,
-                Description = product.Description,
-                Price = product.Price,
-                StockQuantity = product.StockQuantity,
-                IsActive = product.IsActive
-            };
+                loading = false;
+            }
         }
     }
 
@@ -94,31 +123,37 @@ else
         errorMessage = string.Empty;
         isSubmitting = true;
 
-        bool success;
-        if (IsEdit && ProductId.HasValue)
+        try
         {
-            success = await ProductService.Update(ProductId.Value, new UpdateProductRequest(
-                model.Name, model.Description, model.Price, model.StockQuantity, model.IsActive));
-        }
-        else
-        {
-            success = await ProductService.Create(new CreateProductRequest(
-                model.Name, model.Description, model.Price, model.StockQuantity));
-        }
+            OperationResult result;
+            if (IsEdit && ProductId.HasValue)
+            {
+                result = await ProductService.Update(ProductId.Value, new UpdateProductRequest(
+                    model.Name, model.Description, model.Price, model.StockQuantity, model.IsActive));
+            }
+            else
+            {
+                result = await ProductService.Create(new CreateProductRequest(
+                    model.Name, model.Description, model.Price, model.StockQuantity));
+            }
 
-        isSubmitting = false;
-
-        if (success)
-        {
-            NavManager.NavigateTo("/products");
+            if (result.Success)
+            {
+                NavManager.NavigateTo("/products");
+            }
+            else
+            {
+                // Show the server-side reason (e.g. duplicate name).
+                errorMessage = string.IsNullOrWhiteSpace(result.Error)
+                    ? "Failed to save the product. Please check your input and try again."
+                    : result.Error;
+            }
         }
-        else
+        finally
         {
-            errorMessage = "Failed to save product. Please check your input and try again.";
+            isSubmitting = false;
         }
     }
-
-    private void Cancel() => NavManager.NavigateTo("/products");
 
     private class ProductFormModel
     {

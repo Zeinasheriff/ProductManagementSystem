@@ -1,70 +1,96 @@
 ﻿@page "/dashboard"
 @attribute [Authorize]
+@using ProductManagement.Blazor.Shared
+@inject IProductClientService ProductService
+@inject IOrderClientService OrderService
+@inject AuthenticationStateProvider AuthStateProvider
 
-<PageTitle>Dashboard</PageTitle>
+<PageTitle>Dashboard · ProductHub</PageTitle>
 
-<div class="alert alert-success d-flex align-items-center">
-    <i class="bi bi-person-check me-2 fs-4"></i>
-    <div>
-        <strong>Welcome back, @GetDisplayName()!</strong>
+<div class="hero mb-4">
+    <h1>Welcome back, @displayName!</h1>
+    <p>Manage your catalog, place orders and keep an eye on stock levels - all from one place.</p>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="/orders/create" class="btn btn-light"><i class="bi bi-cart-plus me-1"></i>Create Order</a>
+        <a href="/products" class="btn btn-light-ghost"><i class="bi bi-box-seam me-1"></i>Browse Products</a>
     </div>
 </div>
 
-<div class="text-center mb-5">
-    <h1 class="display-4">Product Management System</h1>
-    <p class="lead">Manage products, create orders, and track your inventory.</p>
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card stat-card">
+            <span class="stat-icon"><i class="bi bi-box-seam"></i></span>
+            <div>
+                <div class="stat-value">@(loadingStats ? "…" : productCount.ToString("N0"))</div>
+                <div class="stat-label">Products in catalog</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card">
+            <span class="stat-icon green"><i class="bi bi-receipt"></i></span>
+            <div>
+                <div class="stat-value">@(loadingStats ? "…" : orderCount.ToString("N0"))</div>
+                <div class="stat-label">Orders placed</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card">
+            <span class="stat-icon amber"><i class="bi bi-cash-stack"></i></span>
+            <div>
+                <div class="stat-value">@(loadingStats ? "…" : totalSpent.ToString("C"))</div>
+                <div class="stat-label">Total spent</div>
+            </div>
+        </div>
+    </div>
 </div>
 
-<div class="row g-4">
+<h5 class="fw-bold text-dark mb-3">Quick actions</h5>
+<div class="row g-3">
     <div class="col-md-4">
-        <div class="card h-100 shadow-sm">
-            <div class="card-body text-center">
-                <h5 class="card-title">Products</h5>
-                <p class="card-text">Browse the catalog, search by name, and view stock levels.</p>
-                <a href="/products" class="btn btn-primary">View Products</a>
-            </div>
-        </div>
+        <a href="/products" class="card quick-card text-decoration-none">
+            <h5><i class="bi bi-search fs-5"></i> Browse Catalog</h5>
+            <p class="text-muted mb-0">Search products by name and check live stock levels.</p>
+        </a>
     </div>
     <div class="col-md-4">
-        <div class="card h-100 shadow-sm">
-            <div class="card-body text-center">
-                <h5 class="card-title">Create Order</h5>
-                <p class="card-text">Place an order with one or more products. Stock is validated automatically.</p>
-                <a href="/orders/create" class="btn btn-success">Create Order</a>
-            </div>
-        </div>
+        <a href="/orders/create" class="card quick-card text-decoration-none">
+            <h5><i class="bi bi-cart-plus fs-5"></i> Create Order</h5>
+            <p class="text-muted mb-0">Place an order - stock is validated automatically server-side.</p>
+        </a>
     </div>
     <div class="col-md-4">
-        <div class="card h-100 shadow-sm">
-            <div class="card-body text-center">
-                <h5 class="card-title">My Orders</h5>
-                <p class="card-text">View your order history, line items, and totals.</p>
-                <a href="/orders" class="btn btn-info text-white">View Orders</a>
-            </div>
-        </div>
+        <a href="/orders" class="card quick-card text-decoration-none">
+            <h5><i class="bi bi-receipt fs-5"></i> My Orders</h5>
+            <p class="text-muted mb-0">Review order history, line items and totals.</p>
+        </a>
     </div>
 </div>
 
 @code {
-    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
-
-    private string displayName = string.Empty;
+    private int productCount;
+    private int orderCount;
+    private decimal totalSpent;
+    private bool loadingStats = true;
+    private string displayName = "there";
 
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
-        if (user.Identity?.IsAuthenticated == true)
+        var name = UserDisplay.GetDisplayName(authState.User);
+        if (!string.IsNullOrWhiteSpace(name))
         {
-            var firstName = user.FindFirst(ClaimTypes.GivenName)?.Value ?? string.Empty;
-            var lastName = user.FindFirst(ClaimTypes.Surname)?.Value ?? string.Empty;
-            var email = user.FindFirst(ClaimTypes.Email)?.Value ?? string.Empty;
-
-            displayName = string.IsNullOrWhiteSpace(firstName) && string.IsNullOrWhiteSpace(lastName)
-                ? email
-                : $"{firstName} {lastName}".Trim();
+            displayName = name;
         }
-    }
 
-    private string GetDisplayName() => string.IsNullOrWhiteSpace(displayName) ? "there" : displayName;
+        var products = await ProductService.SearchProducts("", 1, 1);
+        productCount = products?.TotalCount ?? 0;
+
+        var orders = await OrderService.GetMyOrders();
+        orderCount = orders?.Count ?? 0;
+        totalSpent = orders?.Sum(o => o.TotalAmount) ?? 0m;
+
+        loadingStats = false;
+    }
 }

@@ -113,53 +113,94 @@ public class OrderService : IOrderService
 
     public async Task<List<OrderDto>> GetUserOrdersAsync(string userId, CancellationToken cancellationToken = default)
     {
-        var orders = await _context.Orders
+        // Projection instead of Include(): one round trip, and the nullable
+        // cast guarantees LEFT JOIN semantics for the user email even if a
+        // user row were ever missing.
+        var rows = await _context.Orders
             .AsNoTracking()
-            .Include(o => o.User)
-            .Include(o => o.OrderItems)
-            .ThenInclude(oi => oi.Product)
             .Where(o => o.CreatedByUserId == userId)
             .OrderByDescending(o => o.CreatedAt)
+            .Select(o => new
+            {
+                o.Id,
+                o.CreatedByUserId,
+                UserEmail = (string?)o.User.Email,
+                o.Status,
+                o.TotalAmount,
+                o.OrderDate,
+                Items = o.OrderItems
+                    .Select(i => new
+                    {
+                        i.Id,
+                        i.ProductId,
+                        ProductName = (string?)i.Product.Name,
+                        i.Quantity,
+                        i.UnitPrice,
+                        i.TotalPrice
+                    })
+                    .ToList()
+            })
             .ToListAsync(cancellationToken);
 
-        // MapToDto is a C# method that cannot be translated to SQL,
-        // so we materialize the entities first, then map in memory.
-        return orders.Select(MapToDto).ToList();
+        // Enum-to-string mapping happens in memory (not translatable to SQL).
+        return rows.Select(r => new OrderDto(
+            r.Id,
+            r.CreatedByUserId,
+            r.UserEmail ?? "N/A",
+            r.Status.ToString(),
+            r.TotalAmount,
+            r.OrderDate,
+            r.Items.Select(i => new OrderItemDto(
+                i.Id, i.ProductId, i.ProductName ?? "Unknown Product",
+                i.Quantity, i.UnitPrice, i.TotalPrice)).ToList()
+        )).ToList();
     }
 
     public async Task<OrderDto> GetOrderByIdAsync(int id, string userId, bool isAdmin, CancellationToken cancellationToken = default)
     {
-        var order = await _context.Orders
+        var row = await _context.Orders
             .AsNoTracking()
-            .Include(o => o.User)
-            .Include(o => o.OrderItems)
-            .ThenInclude(oi => oi.Product)
-            .FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
+            .Where(o => o.Id == id)
+            .Select(o => new
+            {
+                o.Id,
+                o.CreatedByUserId,
+                UserEmail = (string?)o.User.Email,
+                o.Status,
+                o.TotalAmount,
+                o.OrderDate,
+                Items = o.OrderItems
+                    .Select(i => new
+                    {
+                        i.Id,
+                        i.ProductId,
+                        ProductName = (string?)i.Product.Name,
+                        i.Quantity,
+                        i.UnitPrice,
+                        i.TotalPrice
+                    })
+                    .ToList()
+            })
+            .FirstOrDefaultAsync(cancellationToken);
 
-        if (order == null) throw new NotFoundException($"Order with ID {id} was not found.");
+        if (row == null) throw new NotFoundException($"Order with ID {id} was not found.");
 
-        if (!isAdmin && order.CreatedByUserId != userId)
+        if (!isAdmin && row.CreatedByUserId != userId)
         {
-            throw new BadRequestException("You are not authorized to view this order.");
+            // Deliberately answer 404 instead of 403 so callers cannot use
+            // this endpoint to probe for the existence of other users' orders.
+            throw new NotFoundException($"Order with ID {id} was not found.");
         }
 
-        return MapToDto(order);
+        return new OrderDto(
+            row.Id,
+            row.CreatedByUserId,
+            row.UserEmail ?? "N/A",
+            row.Status.ToString(),
+            row.TotalAmount,
+            row.OrderDate,
+            row.Items.Select(i => new OrderItemDto(
+                i.Id, i.ProductId, i.ProductName ?? "Unknown Product",
+                i.Quantity, i.UnitPrice, i.TotalPrice)).ToList());
     }
-
-    private static OrderDto MapToDto(Order o) => new(
-        o.Id,
-        o.CreatedByUserId,
-        o.User?.Email ?? "N/A",
-        o.Status.ToString(),
-        o.TotalAmount,
-        o.OrderDate,
-        o.OrderItems.Select(i => new OrderItemDto(
-            i.Id,
-            i.ProductId,
-            i.Product?.Name ?? "Unknown Product",
-            i.Quantity,
-            i.UnitPrice,
-            i.TotalPrice
-        )).ToList()
-    );
 }

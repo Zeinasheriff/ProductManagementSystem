@@ -1,7 +1,6 @@
 @page "/logout"
 @inject IAuthService AuthService
 @inject NavigationManager NavManager
-@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Logging out...</PageTitle>
 
@@ -16,8 +15,6 @@
     protected override async Task OnInitializedAsync()
     {
         await AuthService.Logout();
-        // Wait for auth state to propagate, then navigate
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         NavManager.NavigateTo("/", forceLoad: true);
     }
 }

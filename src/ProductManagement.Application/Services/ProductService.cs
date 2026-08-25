@@ -9,6 +9,9 @@ namespace ProductManagement.Application.Services;
 
 public class ProductService : IProductService
 {
+    // Upper bound for any page request, preventing unbounded result sets.
+    public const int MaxPageSize = 100;
+
     private readonly IApplicationDbContext _context;
     private readonly ILogger<ProductService> _logger;
 
@@ -20,19 +23,25 @@ public class ProductService : IProductService
 
     public async Task<PagedResult<ProductDto>> GetProductsAsync(ProductSearchRequest request, CancellationToken cancellationToken = default)
     {
+        // Clamp caller-supplied paging values so they can never produce a
+        // negative Skip, a division-by-zero, or unbounded result sets.
+        int pageNumber = Math.Max(1, request.PageNumber);
+        int pageSize = Math.Clamp(request.PageSize <= 0 ? 10 : request.PageSize, 1, MaxPageSize);
+
         var query = _context.Products.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(request.Name))
         {
-            query = query.Where(p => EF.Functions.Like(p.Name, $"%{request.Name}%"));
+            string pattern = $"%{EscapeLikePattern(request.Name.Trim())}%";
+            query = query.Where(p => EF.Functions.Like(p.Name, pattern, "\\"));
         }
 
         int totalCount = await query.CountAsync(cancellationToken);
 
         var items = await query
             .OrderByDescending(p => p.CreatedAt)
-            .Skip((request.PageNumber - 1) * request.PageSize)
-            .Take(request.PageSize)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .Select(p => new ProductDto(
                 p.Id,
                 p.Name,
@@ -45,7 +54,7 @@ public class ProductService : IProductService
             ))
             .ToListAsync(cancellationToken);
 
-        return new PagedResult<ProductDto>(items, totalCount, request.PageNumber, request.PageSize);
+        return new PagedResult<ProductDto>(items, totalCount, pageNumber, pageSize);
     }
 
     public async Task<ProductDto> GetProductByIdAsync(int id, CancellationToken cancellationToken = default)
@@ -77,7 +86,18 @@ public class ProductService : IProductService
         };
 
         _context.Products.Add(product);
-        await _context.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex)
+        {
+            // Two concurrent creates can pass the existence check above; the
+            // unique index on Name then rejects the loser at the DB level.
+            _logger.LogWarning(ex, "Duplicate product name insert raced with another request: {ProductName}", request.Name);
+            throw new BadRequestException($"A product with the name '{request.Name}' already exists.");
+        }
 
         _logger.LogInformation("Product {ProductId} created: {ProductName}", product.Id, product.Name);
 
@@ -103,7 +123,15 @@ public class ProductService : IProductService
         product.IsActive = request.IsActive;
         product.UpdatedAt = DateTime.UtcNow;
 
-        await _context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex)
+        {
+            _logger.LogWarning(ex, "Duplicate product name raced during update: {ProductName}", request.Name);
+            throw new BadRequestException($"Another product with the name '{request.Name}' already exists.");
+        }
 
         _logger.LogInformation("Product {ProductId} updated.", product.Id);
 
@@ -121,4 +149,16 @@ public class ProductService : IProductService
         await _context.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Product {ProductId} deactivated.", id);
     }
+
+    /// <summary>
+    /// Escapes SQL LIKE wildcards so user input cannot inject pattern
+    /// characters ('%', '_', '[') into name searches. Paired with the
+    /// explicit escape character '\' passed to EF.Functions.Like.
+    /// </summary>
+    private static string EscapeLikePattern(string input) =>
+        input
+            .Replace(@"\", @"\\")
+            .Replace("%", @"\%")
+            .Replace("_", "\\_")
+            .Replace("[", "\\[");
 }
