@@ -66,13 +66,56 @@ public class AuthService : IAuthService
     }
 }
 
+/// <summary>Outcome of a mutating API call, carrying a human-readable server error when it fails.</summary>
+public record OperationResult(bool Success, string? Error = null)
+{
+    public static readonly OperationResult Ok = new(true);
+    public static OperationResult Fail(string error) => new(false, error);
+}
+
+/// <summary>Subset of RFC7807 ProblemDetails returned by the API's exception middleware.</summary>
+internal sealed record ApiProblemDetails(string? Title, string? Detail, Dictionary<string, string[]>? Errors);
+
+internal static class HttpErrorReader
+{
+    /// <summary>
+    /// Extracts a user-friendly message from an error response, preferring the
+    /// ProblemDetails detail (e.g. stock/business rule errors), then field
+    /// validation errors, then the title.
+    /// </summary>
+    public static async Task<string> ReadAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            var problem = await response.Content.ReadFromJsonAsync<ApiProblemDetails>();
+            if (!string.IsNullOrWhiteSpace(problem?.Detail))
+            {
+                return problem.Detail;
+            }
+            if (problem?.Errors is { Count: > 0 })
+            {
+                return string.Join(" ", problem.Errors.SelectMany(kv => kv.Value));
+            }
+            if (!string.IsNullOrWhiteSpace(problem?.Title))
+            {
+                return problem.Title;
+            }
+        }
+        catch
+        {
+            // Fall through to generic message below.
+        }
+        return $"Request failed ({(int)response.StatusCode}).";
+    }
+}
+
 public interface IProductClientService
 {
     Task<PagedResult<ProductDto>?> SearchProducts(string name, int pageNumber, int pageSize);
     Task<ProductDto?> GetById(int id);
-    Task<bool> Create(CreateProductRequest request);
-    Task<bool> Update(int id, UpdateProductRequest request);
-    Task<bool> Deactivate(int id);
+    Task<OperationResult> Create(CreateProductRequest request);
+    Task<OperationResult> Update(int id, UpdateProductRequest request);
+    Task<OperationResult> Deactivate(int id);
 }
 
 public class ProductClientService : IProductClientService
@@ -94,28 +137,34 @@ public class ProductClientService : IProductClientService
         return await _http.GetFromJsonAsync<ProductDto>($"api/products/{id}");
     }
 
-    public async Task<bool> Create(CreateProductRequest request)
+    public async Task<OperationResult> Create(CreateProductRequest request)
     {
-        var res = await _http.PostAsJsonAsync("api/products", request);
-        return res.IsSuccessStatusCode;
+        var response = await _http.PostAsJsonAsync("api/products", request);
+        return response.IsSuccessStatusCode
+            ? OperationResult.Ok
+            : OperationResult.Fail(await HttpErrorReader.ReadAsync(response));
     }
 
-    public async Task<bool> Update(int id, UpdateProductRequest request)
+    public async Task<OperationResult> Update(int id, UpdateProductRequest request)
     {
-        var res = await _http.PutAsJsonAsync($"api/products/{id}", request);
-        return res.IsSuccessStatusCode;
+        var response = await _http.PutAsJsonAsync($"api/products/{id}", request);
+        return response.IsSuccessStatusCode
+            ? OperationResult.Ok
+            : OperationResult.Fail(await HttpErrorReader.ReadAsync(response));
     }
 
-    public async Task<bool> Deactivate(int id)
+    public async Task<OperationResult> Deactivate(int id)
     {
-        var res = await _http.DeleteAsync($"api/products/{id}");
-        return res.IsSuccessStatusCode;
+        var response = await _http.DeleteAsync($"api/products/{id}");
+        return response.IsSuccessStatusCode
+            ? OperationResult.Ok
+            : OperationResult.Fail(await HttpErrorReader.ReadAsync(response));
     }
 }
 
 public interface IOrderClientService
 {
-    Task<OrderDto?> CreateOrder(CreateOrderRequest request);
+    Task<(OrderDto? Order, string? Error)> CreateOrder(CreateOrderRequest request);
     Task<List<OrderDto>?> GetMyOrders();
 }
 
@@ -128,11 +177,15 @@ public class OrderClientService : IOrderClientService
         _http = http;
     }
 
-    public async Task<OrderDto?> CreateOrder(CreateOrderRequest request)
+    public async Task<(OrderDto? Order, string? Error)> CreateOrder(CreateOrderRequest request)
     {
-        var res = await _http.PostAsJsonAsync("api/orders", request);
-        if (!res.IsSuccessStatusCode) return null;
-        return await res.Content.ReadFromJsonAsync<OrderDto>();
+        var response = await _http.PostAsJsonAsync("api/orders", request);
+        if (!response.IsSuccessStatusCode)
+        {
+            return (null, await HttpErrorReader.ReadAsync(response));
+        }
+        var order = await response.Content.ReadFromJsonAsync<OrderDto>();
+        return (order, null);
     }
 
     public async Task<List<OrderDto>?> GetMyOrders()

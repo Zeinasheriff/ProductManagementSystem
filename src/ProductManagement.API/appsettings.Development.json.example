@@ -1,0 +1,12 @@
+{
+  "//": "Template for local development settings. Copy this file to 'appsettings.Development.json' (already git-ignored), then replace the placeholder below with a real random key. Alternatively use: dotnet user-secrets set \"Jwt:Secret\" \"<your-key>\"",
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "Jwt": {
+    "Secret": "REPLACE_WITH_A_RANDOM_SECRET_AT_LEAST_32_CHARACTERS_LONG_CHANGE_ME"
+  }
+}

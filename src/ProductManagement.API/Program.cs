@@ -44,12 +44,25 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     options.Password.RequiredLength = 8;
     options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     options.Lockout.MaxFailedAccessAttempts = 5;
+    options.User.RequireUniqueEmail = true;
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
+// SECURITY: fail fast when no signing key is configured. The secret is never
+// stored in source control - supply it via dotnet user-secrets, the
+// JWT__Secret environment variable, or the git-ignored
+// appsettings.Development.json (see appsettings.Development.json.example).
 var jwtSettings = builder.Configuration.GetSection("Jwt");
-var secretKey = Encoding.UTF8.GetBytes(jwtSettings["Secret"]!);
+var jwtSecret = jwtSettings["Secret"];
+if (string.IsNullOrWhiteSpace(jwtSecret) || jwtSecret.Length < 32)
+{
+    throw new InvalidOperationException(
+        "Missing or weak JWT signing key. Configure 'Jwt:Secret' with a random value of at least 32 characters " +
+        "via 'dotnet user-secrets set \"Jwt:Secret\" \"<value>\"', the JWT__Secret environment variable, " +
+        "or the git-ignored appsettings.Development.json (see appsettings.Development.json.example).");
+}
+var secretKey = Encoding.UTF8.GetBytes(jwtSecret);
 
 builder.Services.AddAuthentication(options =>
 {
@@ -58,8 +71,8 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-    options.RequireHttpsMetadata = false; // Set true in Production
-    options.SaveToken = true;
+    // Only relax HTTPS metadata validation during local development.
+    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
@@ -76,6 +89,18 @@ builder.Services.AddAuthentication(options =>
 // 3. Rate Limiting for Auth Security
 builder.Services.AddRateLimiter(options =>
 {
+    // Answer throttled clients with a proper 429 + Retry-After hint.
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.Headers.RetryAfter = "60";
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            title = "Too many requests",
+            detail = "Too many authentication attempts. Please wait a minute and try again."
+        }, cancellationToken);
+    };
+
     options.AddFixedWindowLimiter("AuthRateLimit", opt =>
     {
         opt.Window = TimeSpan.FromMinutes(1);
@@ -137,6 +162,7 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
+app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 if (app.Environment.IsDevelopment())
